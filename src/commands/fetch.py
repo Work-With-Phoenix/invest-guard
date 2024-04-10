@@ -1,5 +1,5 @@
 import logging
-from datetime import time, datetime
+from datetime import time, datetime,timedelta
 import pytz
 import yfinance as yf
 from colorama import Fore, Style
@@ -66,8 +66,12 @@ def is_market_open(exchange):
     elif open_time <= now <= close_time:
         return True, ""
     else:
-        return False, COLOR_RED + "Reason: Market is closed outside of trading hours." + COLOR_RESET
-
+        # Calculate the next open time
+        next_open_date = now.date() + timedelta(days=1)
+        next_open_time = timezone.localize(datetime.combine(next_open_date, market_info["open_time"]))
+        closure_reason = COLOR_RED + "Reason: Market is closed outside of trading hours." + COLOR_RESET
+        next_open_message = COLOR_YELLOW + f"Next market open: {next_open_time.strftime('%Y-%m-%d %H:%M')} ({market_info['timezone']})" + COLOR_RESET
+        return False, closure_reason + "\n" + next_open_message
 @retry((ConnectionError, NewConnectionError), delay=5, backoff=2, tries=3)
 def fetch_data(stock, market_open):
     data = {}
@@ -91,7 +95,7 @@ def fetch_data(stock, market_open):
             history = stock.history(period="2d")
             logger.debug("Historical data: %s", history)
             if len(history) >= 2:
-                data["Previous Close Price"] = COLOR_GREEN + str(history["Close"].iloc[-2]) + COLOR_RESET
+                data["Previous Close Price"] = COLOR_GREEN + str(history["Close"].iloc[-2]) + COLOR_RESET   
 
         # Fetch company name and market capitalization
         info = stock.info
@@ -99,6 +103,9 @@ def fetch_data(stock, market_open):
             if key in info:
                 value = info[key]
                 data[label] = COLOR_GREEN + str(value) + COLOR_RESET if value is not None else COLOR_BLUE + "Unavailable" + COLOR_RESET
+        company_name = info.get("longName", None)
+        data[LABELS["company_name"]] = COLOR_GREEN + str(company_name) + COLOR_RESET if company_name is not None else COLOR_BLUE + "Unavailable" + COLOR_RESET
+
 
     except Exception as e:
         logger.error(COLOR_RED + "Failed to fetch data: %s" % e + COLOR_RESET)
@@ -121,16 +128,16 @@ def fetch_command(args):
 
     if args.source == "yahoo":
         if args.timezone:
-            market_open, closure_reason = is_market_open(args.timezone)
+            market_open, closure_info = is_market_open(args.timezone)
             logger.info("Market open: %s", market_open)
-            logger.info("Closure reason: %s", closure_reason)
+            logger.info("Closure info: %s", closure_info)
             stock = yf.Ticker(args.ticker)
             data = fetch_data(stock, market_open)
         else:
             default_timezone = "United States"
-            market_open, closure_reason = is_market_open(default_timezone)
+            market_open, closure_info = is_market_open(default_timezone)
             logger.info("Market open: %s", market_open)
-            logger.info("Closure reason: %s", closure_reason)
+            logger.info("Closure info: %s", closure_info)
             stock = yf.Ticker(args.ticker)
             data = fetch_data(stock, market_open)
 
@@ -142,6 +149,8 @@ def fetch_command(args):
         else:
             logger.warning("No data fetched for %s", args.ticker)
 
+        # Print closure info separately
+        print(closure_info)
 def setup_subparser(subparsers):
     fetch_parser = subparsers.add_parser("fetch", help="Fetch data")
     fetch_parser.add_argument("-t", "--ticker", help="Ticker symbol", required=True)
