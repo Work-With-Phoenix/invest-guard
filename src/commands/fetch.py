@@ -74,12 +74,27 @@ def is_market_open(exchange):
         return False, closure_reason + "\n" + next_open_message
 
 @retry((ConnectionError, NewConnectionError), delay=5, backoff=2, tries=3)
-def fetch_data(asset_type, ticker, market_open):
+def fetch_data(asset_type, ticker, market_open=None):
     data = {}
     try:
         stock = yf.Ticker(ticker)
-        if asset_type in ["crypto", "currency"] or market_open:
-            # Fetch live data for cryptocurrencies, certain currencies, or when the market is open
+        
+        if asset_type in ["crypto", "currency"]:
+            # Fetch live data for cryptocurrencies and certain currencies
+            # logger.info("Fetching live data...")
+            live_data = stock.history(period="1d")
+            logger.debug("Live data: %s", live_data)
+            if not live_data.empty:
+                data["Open Price"] = COLOR_GREEN + str(live_data["Open"].iloc[-1]) + COLOR_RESET
+                data["High Price"] = COLOR_GREEN + str(live_data["High"].iloc[-1]) + COLOR_RESET
+                data["Low Price"] = COLOR_GREEN + str(live_data["Low"].iloc[-1]) + COLOR_RESET
+                data["Close Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET
+                data["Volume"] = COLOR_GREEN + str(live_data["Volume"].iloc[-1]) + COLOR_RESET
+            else:
+                logger.warning("No live data available.")
+                
+        elif market_open:
+            # Fetch live data for traditional market-dependent assets when the market is open
             logger.info("Fetching live data...")
             live_data = stock.history(period="1d")
             logger.debug("Live data: %s", live_data)
@@ -87,10 +102,11 @@ def fetch_data(asset_type, ticker, market_open):
                 data["Open Price"] = COLOR_GREEN + str(live_data["Open"].iloc[-1]) + COLOR_RESET
                 data["High Price"] = COLOR_GREEN + str(live_data["High"].iloc[-1]) + COLOR_RESET
                 data["Low Price"] = COLOR_GREEN + str(live_data["Low"].iloc[-1]) + COLOR_RESET
-                data["Stock Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET
+                data["Close Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET
                 data["Volume"] = COLOR_GREEN + str(live_data["Volume"].iloc[-1]) + COLOR_RESET
             else:
                 logger.warning("No live data available.")
+                
         else:
             # Fetch historical data for traditional market-dependent assets when the market is closed
             logger.info("Fetching historical data...")
@@ -110,6 +126,7 @@ def fetch_data(asset_type, ticker, market_open):
 
     except Exception as e:
         logger.error(COLOR_RED + "Failed to fetch data: %s" % e + COLOR_RESET)
+        
     return data
 
 def fetch_command(args):
@@ -133,22 +150,41 @@ def fetch_command(args):
         if args.asset_type in ["stock", "etf", "currency", "commodity"]:
             if args.timezone:
                 market_open, closure_info = is_market_open(args.timezone)
+                if args.asset_type == "crypto" or market_open or args.asset_type == "currency":
+                    logger.info("Market open: True")
+                else:
+                    logger.info("Market open: False")
+                    if not market_open:
+                        logger.info("Closure info: %s", closure_info)
+                if market_open or args.asset_type in ["currency", "crypto"]:
+                    logger.info("Fetching live data...")
+                    stock = yf.Ticker(args.ticker)
+                    data = fetch_data(args.asset_type, args.ticker, market_open)
+                else:
+                    logger.info("Fetching historical data...")
+                    stock = yf.Ticker(args.ticker)
+                    data = fetch_data(args.asset_type, args.ticker, market_open)
             else:
                 default_timezone = "United States"
                 market_open, closure_info = is_market_open(default_timezone)
-        else:
-            # For crypto and other assets, consider market open
-            market_open = True
-
-        logger.info("Market open: %s", market_open)
-        logger.info("Closure info: %s", closure_info)
-
-        if market_open or args.asset_type in ["crypto", "currency"]:
+                if args.asset_type == "crypto" or market_open or args.asset_type == "currency":
+                    logger.info("Market open: True")
+                else:
+                    logger.info("Market open: False")
+                    if not market_open:
+                        logger.info("Closure info: %s", closure_info)
+                if market_open or args.asset_type in ["currency", "crypto"]:
+                    logger.info("Fetching live data...")
+                    stock = yf.Ticker(args.ticker)
+                    data = fetch_data(args.asset_type, args.ticker, market_open)
+                else:
+                    logger.info("Fetching historical data...")
+                    stock = yf.Ticker(args.ticker)
+                    data = fetch_data(args.asset_type, args.ticker, market_open)
+        else:  # For crypto and other assets
             logger.info("Fetching live data...")
-            data = fetch_data(args.asset_type, args.ticker, market_open=True)  # Fetch live data
-        else:
-            logger.info("Fetching historical data...")
-            data = fetch_data(args.asset_type, args.ticker, market_open=False)  # Fetch historical data
+            stock = yf.Ticker(args.ticker)
+            data = fetch_data(args.asset_type, args.ticker, market_open=True)  # Fetch live data without checking market status
 
         if data:
             headers = [LABELS.get(key, key) for key in data.keys()]
