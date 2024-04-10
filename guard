@@ -1,0 +1,28 @@
+#!/usr/bin/env python
+
+import argparse
+from src.commands import fetch
+
+def setup_parser():
+    parser = argparse.ArgumentParser(description="Investment data CLI")
+    subparsers = parser.add_subparsers(title="commands", dest="command")
+    
+    # Add subcommands from other modules
+    fetch.setup_subparser(subparsers)
+    
+    
+    return parser
+
+def run():
+    parser = setup_parser()
+    args = parser.parse_args()
+    
+    if args.command == "fetch":
+        fetch.execute(args)
+  
+    # Add more elif statements for other commands
+    else:
+        parser.error("No command specified.")
+
+if __name__ == "__main__":
+    run()
