@@ -1,5 +1,5 @@
 import logging
-from datetime import time, datetime,timedelta
+from datetime import time, datetime, timedelta
 import pytz
 import yfinance as yf
 from colorama import Fore, Style
@@ -72,12 +72,14 @@ def is_market_open(exchange):
         closure_reason = COLOR_RED + "Reason: Market is closed outside of trading hours." + COLOR_RESET
         next_open_message = COLOR_YELLOW + f"Next market open: {next_open_time.strftime('%Y-%m-%d %H:%M')} ({market_info['timezone']})" + COLOR_RESET
         return False, closure_reason + "\n" + next_open_message
+
 @retry((ConnectionError, NewConnectionError), delay=5, backoff=2, tries=3)
-def fetch_data(stock, market_open):
+def fetch_data(asset_type, ticker, market_open):
     data = {}
     try:
-        if market_open:
-            # Fetch live data when the market is open
+        stock = yf.Ticker(ticker)
+        if asset_type in ["crypto", "currency"] or market_open:
+            # Fetch live data for cryptocurrencies, certain currencies, or when the market is open
             logger.info("Fetching live data...")
             live_data = stock.history(period="1d")
             logger.debug("Live data: %s", live_data)
@@ -90,7 +92,7 @@ def fetch_data(stock, market_open):
             else:
                 logger.warning("No live data available.")
         else:
-            # Fetch historical data when the market is closed
+            # Fetch historical data for traditional market-dependent assets when the market is closed
             logger.info("Fetching historical data...")
             history = stock.history(period="2d")
             logger.debug("Historical data: %s", history)
@@ -106,15 +108,16 @@ def fetch_data(stock, market_open):
         company_name = info.get("longName", None)
         data[LABELS["company_name"]] = COLOR_GREEN + str(company_name) + COLOR_RESET if company_name is not None else COLOR_BLUE + "Unavailable" + COLOR_RESET
 
-
     except Exception as e:
         logger.error(COLOR_RED + "Failed to fetch data: %s" % e + COLOR_RESET)
     return data
 
 def fetch_command(args):
     logger.info("Fetching data...")
-    logger.info("Ticker: %s", args.ticker)
+    logger.info("Args: %s", args)  # Log the args object to verify its contents
+    logger.info("Ticker: %s", args.ticker if hasattr(args, 'ticker') else None)  # Access args.ticker attribute if it exists
     logger.info("Source: %s", args.source)
+    logger.info("Asset type: %s", args.asset_type)
 
     logger.info(COLOR_YELLOW + "Checking internet connection..." + COLOR_RESET)
     connected = True  # Simulate internet check, change to actual check
@@ -127,19 +130,25 @@ def fetch_command(args):
     logger.info(COLOR_GREEN + "Connection established." + COLOR_RESET)
 
     if args.source == "yahoo":
-        if args.timezone:
-            market_open, closure_info = is_market_open(args.timezone)
-            logger.info("Market open: %s", market_open)
-            logger.info("Closure info: %s", closure_info)
-            stock = yf.Ticker(args.ticker)
-            data = fetch_data(stock, market_open)
+        if args.asset_type in ["stock", "etf", "currency", "commodity"]:
+            if args.timezone:
+                market_open, closure_info = is_market_open(args.timezone)
+            else:
+                default_timezone = "United States"
+                market_open, closure_info = is_market_open(default_timezone)
         else:
-            default_timezone = "United States"
-            market_open, closure_info = is_market_open(default_timezone)
-            logger.info("Market open: %s", market_open)
-            logger.info("Closure info: %s", closure_info)
-            stock = yf.Ticker(args.ticker)
-            data = fetch_data(stock, market_open)
+            # For crypto and other assets, consider market open
+            market_open = True
+
+        logger.info("Market open: %s", market_open)
+        logger.info("Closure info: %s", closure_info)
+
+        if market_open or args.asset_type in ["crypto", "currency"]:
+            logger.info("Fetching live data...")
+            data = fetch_data(args.asset_type, args.ticker, market_open=True)  # Fetch live data
+        else:
+            logger.info("Fetching historical data...")
+            data = fetch_data(args.asset_type, args.ticker, market_open=False)  # Fetch historical data
 
         if data:
             headers = [LABELS.get(key, key) for key in data.keys()]
@@ -149,16 +158,19 @@ def fetch_command(args):
         else:
             logger.warning("No data fetched for %s", args.ticker)
 
-        # Print closure info separately
-        print(closure_info)
 def setup_subparser(subparsers):
     fetch_parser = subparsers.add_parser("fetch", help="Fetch data")
     fetch_parser.add_argument("-t", "--ticker", help="Ticker symbol", required=True)
     fetch_parser.add_argument("-s", "--source", help="Data source", choices=["yahoo", "google"], default="yahoo")
     fetch_parser.add_argument("-z", "--timezone", help="Timezone")
+    fetch_parser.add_argument("--asset-type", help="Asset type to fetch data for", choices=["stock", "etf", "crypto", "currency", "commodity"], required=True)
 
 def execute(args):
-    fetch_command(args)
+    if args.command == "fetch":
+        fetch_command(args)
+    else:
+        print("Invalid command. Please use 'fetch' command.")
+
 
 if __name__ == "__main__":
     import argparse
