@@ -51,31 +51,43 @@ MARKET_TIMES = {
     "United States": {"timezone": "US/Eastern", "open_time": time(9, 30), "close_time": time(16)},
     "Europe": {"timezone": "Europe/Berlin", "open_time": time(9), "close_time": time(17, 30)},
     "Asia": {"timezone": "Asia/Tokyo", "open_time": time(9), "close_time": time(15)},
+    "Australia": {"timezone": "Australia/Sydney", "open_time": time(10), "close_time": time(16)},
+    "Hong Kong": {"timezone": "Asia/Hong_Kong", "open_time": time(9, 30), "close_time": time(16)},
+    "India": {"timezone": "Asia/Kolkata", "open_time": time(9, 15), "close_time": time(15, 30)},
+    "Canada": {"timezone": "America/Toronto", "open_time": time(9, 30), "close_time": time(16)},
+    "Nigeria": {"timezone": "Africa/Lagos", "open_time": time(10), "close_time": time(16)},
+    "South Africa": {"timezone": "Africa/Johannesburg", "open_time": time(9, 30), "close_time": time(17)},
+    "Kenya": {"timezone": "Africa/Nairobi", "open_time": time(9, 30), "close_time": time(15)},
+    "Ghana": {"timezone": "Africa/Accra", "open_time": time(10), "close_time": time(16)},
+    "Egypt": {"timezone": "Africa/Cairo", "open_time": time(10), "close_time": time(15)},
+    "Morocco": {"timezone": "Africa/Casablanca", "open_time": time(9, 30), "close_time": time(16, 30)},
+    # Add more African markets as needed
 }
 
-def is_market_open(exchange):
+def is_market_open(default_timezone="US/Eastern", provided_timezone=None):
     try:
-        market_info = MARKET_TIMES[exchange]
-    except KeyError:
-        return False, COLOR_RED + f"Market '{exchange}' not found." + COLOR_RESET
+        market_info = MARKET_TIMES.get(provided_timezone, MARKET_TIMES.get(default_timezone))
+        if not market_info:
+            raise ValueError(f"Market timezone '{provided_timezone}' not found.")
+        
+        timezone = pytz.timezone(market_info["timezone"])
+        now = datetime.now(timezone)
+        open_time = timezone.localize(datetime.combine(now.date(), market_info["open_time"]))
+        close_time = timezone.localize(datetime.combine(now.date(), market_info["close_time"]))
 
-    timezone = pytz.timezone(market_info["timezone"])
-    now = datetime.now(timezone)
-    open_time = timezone.localize(datetime.combine(now.date(), market_info["open_time"]))
-    close_time = timezone.localize(datetime.combine(now.date(), market_info["close_time"]))
-
-    if now.weekday() >= 5 or now.strftime('%Y-%m-%d') in holidays.CountryHoliday("US"):
-        return False, COLOR_RED + "Reason: Today is a holiday or weekend." + COLOR_RESET
-    elif open_time <= now <= close_time:
-        return True, ""
-    else:
-        # Calculate the next open time
-        next_open_date = now.date() + timedelta(days=1)
-        next_open_time = timezone.localize(datetime.combine(next_open_date, market_info["open_time"]))
-        closure_reason = COLOR_RED + "Reason: Market is closed outside of trading hours." + COLOR_RESET
-        next_open_message = COLOR_YELLOW + f"Next market open: {next_open_time.strftime('%Y-%m-%d %H:%M')} ({market_info['timezone']})" + COLOR_RESET
-        return False, closure_reason + "\n" + next_open_message
-
+        if now.weekday() >= 5 or now.strftime('%Y-%m-%d') in holidays.CountryHoliday("US"):
+            return False, COLOR_RED + "Reason: Today is a holiday or weekend." + COLOR_RESET
+        elif open_time <= now <= close_time:
+            return True, ""
+        else:
+            # Calculate the next open time
+            next_open_date = now.date() + timedelta(days=1)
+            next_open_time = timezone.localize(datetime.combine(next_open_date, market_info["open_time"]))
+            closure_reason = COLOR_RED + "Reason: Market is closed outside of trading hours." + COLOR_RESET
+            next_open_message = COLOR_YELLOW + f"Next market open: {next_open_time.strftime('%Y-%m-%d %H:%M')} ({market_info['timezone']})" + COLOR_RESET
+            return False, closure_reason + "\n" + next_open_message
+    except Exception as e:
+        raise ValueError(f"Market timezone '{provided_timezone}' not found: {e}")
 
 @retry((ConnectionError, NewConnectionError), delay=5, backoff=2, tries=3)
 def calculate_market_cap(current_price, volume):
@@ -159,8 +171,8 @@ def fetch_command(args):
                 logger.info("Fetching historical data...")
                 data = fetch_data(args.asset_type, args.ticker, args.start_date, args.end_date)
             else:
-                default_timezone = "United States"
-                market_open, closure_info = is_market_open(default_timezone)
+                default_timezone = args.timezone if args.timezone else "United States"
+                market_open, closure_info = is_market_open(default_timezone, args.timezone)
                 if args.asset_type == "crypto" or market_open or args.asset_type == "currency":
                     logger.info("Market open: True")
                 else:
@@ -187,7 +199,6 @@ def fetch_command(args):
 
     else:
         logger.warning("Invalid source specified. Only 'yahoo' source is supported.")
-
 def setup_subparser(subparsers):
     fetch_parser = subparsers.add_parser("fetch", help="Fetch data")
     fetch_parser.add_argument("-t", "--ticker", help="Ticker symbol", required=True)
