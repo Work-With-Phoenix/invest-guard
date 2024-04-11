@@ -7,6 +7,8 @@ from retry import retry
 from urllib3.exceptions import NewConnectionError
 import holidays
 from tabulate import tabulate
+from .helpers.fetch_help import display_help
+import numpy as np
 
 # Set up logging configuration
 logging.basicConfig(level=logging.INFO)
@@ -89,75 +91,40 @@ def calculate_market_cap(current_price, volume):
         # Handle the case where either current_price or volume cannot be converted to float
         return None  # Or any appropriate error handling logic
 
-def fetch_data(asset_type, ticker, market_open=None):
+
+
+def fetch_data(asset_type, ticker, start_date=None, end_date=None, market_open=None):
     data = {}
     try:
         stock = yf.Ticker(ticker)
         
-        if asset_type in ["crypto", "currency"]:
-            # Fetch live data for cryptocurrencies and certain currencies
-            # logger.info("Fetching live data...")
-            live_data = stock.history(period="1d")
-            logger.debug("Live data: %s", live_data)
-            if not live_data.empty:
-                data["Open Price"] = COLOR_GREEN + str(live_data["Open"].iloc[-1]) + COLOR_RESET
-                data["High Price"] = COLOR_GREEN + str(live_data["High"].iloc[-1]) + COLOR_RESET
-                data["Low Price"] = COLOR_GREEN + str(live_data["Low"].iloc[-1]) + COLOR_RESET
-                data["Close Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET
-                data["Volume"] = COLOR_GREEN + str(live_data["Volume"].iloc[-1]) + COLOR_RESET
-                data["Current Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET  # Add current price
-                data["Market Cap"] = calculate_market_cap(data["Current Price"], data["Volume"])
+        if start_date and end_date:
+            # Fetch historical data based on dates
+            history = stock.history(start=start_date, end=end_date)
+            if not history.empty:
+                data = history.to_dict(orient='records')
             else:
-                logger.warning("No live data available.")
-                
-        elif market_open:
-            # Fetch live data for traditional market-dependent assets when the market is open
-            # logger.info("Fetching live data...")
-            live_data = stock.history(period="1d")
-            logger.debug("Live data: %s", live_data)
-            if not live_data.empty:
-                data["Open Price"] = COLOR_GREEN + str(live_data["Open"].iloc[-1]) + COLOR_RESET
-                data["High Price"] = COLOR_GREEN + str(live_data["High"].iloc[-1]) + COLOR_RESET
-                data["Low Price"] = COLOR_GREEN + str(live_data["Low"].iloc[-1]) + COLOR_RESET
-                data["Close Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET
-                data["Current Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET  # Add current price
-                data["Volume"] = COLOR_GREEN + str(live_data["Volume"].iloc[-1]) + COLOR_RESET
-                 # Calculate market cap
-                current_price = live_data["Close"].iloc[-1]
-                volume = live_data["Volume"].iloc[-1]
-                market_cap = calculate_market_cap(current_price, volume)
-                data["Market Cap"] = market_cap
-            else:
-                logger.warning("No live data available.")
-                
+                raise ValueError("No historical data available for the specified date range.")
         else:
-            # Fetch historical data for traditional market-dependent assets when the market is closed
-            # logger.info("Fetching historical data...")
-            history = stock.history(period="2d")
-            logger.debug("Historical data: %s", history)
-            if len(history) >= 2:
-                data["Previous Close Price"] = COLOR_GREEN + str(history["Close"].iloc[-2]) + COLOR_RESET
-                # Calculate market cap based on the previous close price and volume of the last trading day
-                previous_close_price = history["Close"].iloc[-2]
-                volume = history["Volume"].iloc[-1]
-                market_cap = calculate_market_cap(previous_close_price, volume)
-                data["Market Cap"] = market_cap   
-
-        # Fetch company name and market capitalization
-        info = stock.info
-        for key, label in LABELS.items():
-            if key in info:
-                value = info[key]
-                data[label] = COLOR_GREEN + str(value) + COLOR_RESET if value is not None else COLOR_BLUE + "Unavailable" + COLOR_RESET
-        company_name = info.get("longName", None)
-        data[LABELS["company_name"]] = COLOR_GREEN + str(company_name) + COLOR_RESET if company_name is not None else COLOR_BLUE + "Unavailable" + COLOR_RESET
-        data["Timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Fetch live data or historical data when the market is open
+            if market_open or asset_type in ["crypto", "currency"]:
+                live_data = stock.history(period="1d")
+                if not live_data.empty:
+                    data = live_data.to_dict(orient='records')
+                else:
+                    raise ValueError("No live data available.")
+            else:
+                # Fetch historical data for traditional market-dependent assets when the market is closed
+                history = stock.history(period="2d")
+                if len(history) >= 2:
+                    data = history.to_dict(orient='records')
+                else:
+                    raise ValueError("No historical data available when the market was closed.")
 
     except Exception as e:
-        logger.error(COLOR_RED + "Failed to fetch data: %s" % e + COLOR_RESET)
+        raise RuntimeError(f"Failed to fetch data for {ticker}: {e}")
         
     return data
-
 def fetch_command(args):
     logger.info("Fetching data...")
     logger.info("Args: %s", args)  # Log the args object to verify its contents
@@ -177,22 +144,9 @@ def fetch_command(args):
 
     if args.source == "yahoo":
         if args.asset_type in ["stock", "etf", "currency", "commodity"]:
-            if args.timezone:
-                market_open, closure_info = is_market_open(args.timezone)
-                if args.asset_type == "crypto" or market_open or args.asset_type == "currency":
-                    logger.info("Market open: True")
-                else:
-                    logger.info("Market open: False")
-                    if not market_open:
-                        logger.info("Closure info: %s", closure_info)
-                if market_open or args.asset_type in ["currency", "crypto"]:
-                    logger.info("Fetching live data...")
-                    stock = yf.Ticker(args.ticker)
-                    data = fetch_data(args.asset_type, args.ticker, market_open)
-                else:
-                    logger.info("Fetching historical data...")
-                    stock = yf.Ticker(args.ticker)
-                    data = fetch_data(args.asset_type, args.ticker, market_open)
+            if args.start_date and args.end_date:
+                logger.info("Fetching historical data...")
+                data = fetch_data(args.asset_type, args.ticker, args.start_date, args.end_date)
             else:
                 default_timezone = "United States"
                 market_open, closure_info = is_market_open(default_timezone)
@@ -204,24 +158,24 @@ def fetch_command(args):
                         logger.info("Closure info: %s", closure_info)
                 if market_open or args.asset_type in ["currency", "crypto"]:
                     logger.info("Fetching live data...")
-                    stock = yf.Ticker(args.ticker)
-                    data = fetch_data(args.asset_type, args.ticker, market_open)
+                    data = fetch_data(args.asset_type, args.ticker)
                 else:
                     logger.info("Fetching historical data...")
-                    stock = yf.Ticker(args.ticker)
-                    data = fetch_data(args.asset_type, args.ticker, market_open)
+                    data = fetch_data(args.asset_type, args.ticker)
         else:  # For crypto and other assets
             logger.info("Fetching live data...")
-            stock = yf.Ticker(args.ticker)
-            data = fetch_data(args.asset_type, args.ticker, market_open=True)  # Fetch live data without checking market status
+            data = fetch_data(args.asset_type, args.ticker)
 
         if data:
-            headers = [LABELS.get(key, key) for key in data.keys()]
-            rows = [[value for value in data.values()]]
+            headers = [LABELS.get(key, key) for key in data[0].keys()]  # Get headers from the first data entry
+            rows = [[value for value in entry.values()] for entry in data]  # Extract values from each entry
             table = tabulate(rows, headers=headers, tablefmt="grid")
             print(table)
         else:
             logger.warning("No data fetched for %s", args.ticker)
+
+    else:
+        logger.warning("Invalid source specified. Only 'yahoo' source is supported.")
 
 def setup_subparser(subparsers):
     fetch_parser = subparsers.add_parser("fetch", help="Fetch data")
@@ -229,6 +183,38 @@ def setup_subparser(subparsers):
     fetch_parser.add_argument("-s", "--source", help="Data source", choices=["yahoo", "google"], default="yahoo")
     fetch_parser.add_argument("-z", "--timezone", help="Timezone")
     fetch_parser.add_argument("--asset-type", help="Asset type to fetch data for", choices=["stock", "etf", "crypto", "currency", "commodity"], required=True)
+    fetch_parser.add_argument("--start-date", help="Start date for historical data (YYYY-MM-DD)")
+    fetch_parser.add_argument("--end-date", help="End date for historical data (YYYY-MM-DD)")
+
+
+def execute(args):
+    if args.command == "fetch":
+        fetch_command(args)
+    else:
+        print("Invalid command. Please use 'fetch' command.")
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Investment Guard CLI")
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    setup_subparser(subparsers)
+
+    args = parser.parse_args()
+
+    if args.command == "fetch":
+        execute(args)
+    else:
+        print("Invalid command. Please use 'fetch' command.")
+def setup_subparser(subparsers):
+    fetch_parser = subparsers.add_parser("fetch", help="Fetch data")
+    fetch_parser.add_argument("-t", "--ticker", help="Ticker symbol", required=True)
+    fetch_parser.add_argument("-s", "--source", help="Data source", choices=["yahoo"], default="yahoo")
+    fetch_parser.add_argument("-z", "--timezone", help="Timezone")
+    fetch_parser.add_argument("--asset-type", help="Asset type to fetch data for", choices=["stock", "etf", "crypto", "currency", "commodity"], required=True)
+    fetch_parser.add_argument("--start-date", help="Start date for historical data fetch")
+    fetch_parser.add_argument("--end-date", help="End date for historical data fetch")
 
 def execute(args):
     if args.command == "fetch":
@@ -246,6 +232,11 @@ if __name__ == "__main__":
     setup_subparser(subparsers)
 
     args = parser.parse_args()
+    if args.command == "fetch":
+     execute(args)
+    else:
+        print("Invalid command. Please use 'fetch' command.")
+        display_help()
 
     if args.command == "fetch":
         execute(args)
