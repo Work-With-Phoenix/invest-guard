@@ -102,7 +102,10 @@ def fetch_data(asset_type, ticker, start_date=None, end_date=None, market_open=N
             # Fetch historical data based on dates
             history = stock.history(start=start_date, end=end_date)
             if not history.empty:
-                data = history.to_dict(orient='records')
+                history['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                history['Market Cap'] = history.apply(lambda row: calculate_market_cap(row['Close'], row['Volume']), axis=1)
+                
+                data = history.reset_index().to_dict(orient='records')
             else:
                 raise ValueError("No historical data available for the specified date range.")
         else:
@@ -110,21 +113,29 @@ def fetch_data(asset_type, ticker, start_date=None, end_date=None, market_open=N
             if market_open or asset_type in ["crypto", "currency"]:
                 live_data = stock.history(period="1d")
                 if not live_data.empty:
-                    data = live_data.to_dict(orient='records')
+                    live_data['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    live_data['Market Cap'] = live_data.apply(lambda row: calculate_market_cap(row['Close'], row['Volume']), axis=1)
+                    data = live_data.reset_index().to_dict(orient='records')
                 else:
                     raise ValueError("No live data available.")
             else:
                 # Fetch historical data for traditional market-dependent assets when the market is closed
                 history = stock.history(period="2d")
                 if len(history) >= 2:
-                    data = history.to_dict(orient='records')
+                     history['Timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                     history['Market Cap'] = history.apply(lambda row: calculate_market_cap(row['Close'], row['Volume']), axis=1)
+                     data = history.reset_index().to_dict(orient='records')
                 else:
                     raise ValueError("No historical data available when the market was closed.")
+                
+
+            
 
     except Exception as e:
         raise RuntimeError(f"Failed to fetch data for {ticker}: {e}")
         
     return data
+
 def fetch_command(args):
     logger.info("Fetching data...")
     logger.info("Args: %s", args)  # Log the args object to verify its contents

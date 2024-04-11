@@ -3,6 +3,7 @@ from rich.table import Table
 from rich.logging import RichHandler
 import logging
 
+
 def setup_logging():
     logging.basicConfig(
         level=logging.INFO,
@@ -10,6 +11,7 @@ def setup_logging():
         datefmt="[%X]",
         handlers=[RichHandler()]
     )
+
 
 def display_help():
     console = Console()
@@ -21,7 +23,8 @@ def display_help():
     table.add_row("[yellow]-t, --ticker TICKER[/yellow]", "Ticker symbol (required)")
     table.add_row("[yellow]-s, --source {yahoo}[/yellow]", "Data source (default: yahoo)")
     table.add_row("[yellow]-z, --timezone TIMEZONE[/yellow]", "Timezone")
-    table.add_row("[yellow]--asset-type {stock,etf,crypto,currency,commodity}[/yellow]", "Asset type to fetch data for (required)")
+    table.add_row("[yellow]--asset-type {stock,etf,crypto,currency,commodity}[/yellow]",
+                  "Asset type to fetch data for (required)")
 
     console.print("\n[bold yellow]Usage:[/bold yellow]\n")
     console.print("guard fetch [OPTIONS]\n")
@@ -31,6 +34,7 @@ def display_help():
 
     console.print("\n[bold yellow]Description:[/bold yellow]\n")
     console.print("Fetch data from different sources.\n")
+
 
 if __name__ == "__main__":
     setup_logging()
