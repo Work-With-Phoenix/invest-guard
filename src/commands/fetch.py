@@ -33,7 +33,8 @@ LABELS = {
     "earnings_date": "Earnings Date",
     "forward_dividend_yield": "Forward Dividend & Yield",
     "ex_dividend_date": "Ex-Dividend Date",
-    "1y_target_est": "1y Target Est"
+    "1y_target_est": "1y Target Est",
+    "current_price": "Current Price" 
 }
 
 # Color codes
@@ -73,7 +74,21 @@ def is_market_open(exchange):
         next_open_message = COLOR_YELLOW + f"Next market open: {next_open_time.strftime('%Y-%m-%d %H:%M')} ({market_info['timezone']})" + COLOR_RESET
         return False, closure_reason + "\n" + next_open_message
 
+
 @retry((ConnectionError, NewConnectionError), delay=5, backoff=2, tries=3)
+def calculate_market_cap(current_price, volume):
+    """
+    Calculate market capitalization.
+    Market Cap = Current Price * Volume
+    """
+    try:
+        current_price = float(current_price)
+        volume = float(volume)
+        return current_price * volume
+    except ValueError:
+        # Handle the case where either current_price or volume cannot be converted to float
+        return None  # Or any appropriate error handling logic
+
 def fetch_data(asset_type, ticker, market_open=None):
     data = {}
     try:
@@ -90,12 +105,14 @@ def fetch_data(asset_type, ticker, market_open=None):
                 data["Low Price"] = COLOR_GREEN + str(live_data["Low"].iloc[-1]) + COLOR_RESET
                 data["Close Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET
                 data["Volume"] = COLOR_GREEN + str(live_data["Volume"].iloc[-1]) + COLOR_RESET
+                data["Current Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET  # Add current price
+                data["Market Cap"] = calculate_market_cap(data["Current Price"], data["Volume"])
             else:
                 logger.warning("No live data available.")
                 
         elif market_open:
             # Fetch live data for traditional market-dependent assets when the market is open
-            logger.info("Fetching live data...")
+            # logger.info("Fetching live data...")
             live_data = stock.history(period="1d")
             logger.debug("Live data: %s", live_data)
             if not live_data.empty:
@@ -103,17 +120,28 @@ def fetch_data(asset_type, ticker, market_open=None):
                 data["High Price"] = COLOR_GREEN + str(live_data["High"].iloc[-1]) + COLOR_RESET
                 data["Low Price"] = COLOR_GREEN + str(live_data["Low"].iloc[-1]) + COLOR_RESET
                 data["Close Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET
+                data["Current Price"] = COLOR_GREEN + str(live_data["Close"].iloc[-1]) + COLOR_RESET  # Add current price
                 data["Volume"] = COLOR_GREEN + str(live_data["Volume"].iloc[-1]) + COLOR_RESET
+                 # Calculate market cap
+                current_price = live_data["Close"].iloc[-1]
+                volume = live_data["Volume"].iloc[-1]
+                market_cap = calculate_market_cap(current_price, volume)
+                data["Market Cap"] = market_cap
             else:
                 logger.warning("No live data available.")
                 
         else:
             # Fetch historical data for traditional market-dependent assets when the market is closed
-            logger.info("Fetching historical data...")
+            # logger.info("Fetching historical data...")
             history = stock.history(period="2d")
             logger.debug("Historical data: %s", history)
             if len(history) >= 2:
-                data["Previous Close Price"] = COLOR_GREEN + str(history["Close"].iloc[-2]) + COLOR_RESET   
+                data["Previous Close Price"] = COLOR_GREEN + str(history["Close"].iloc[-2]) + COLOR_RESET
+                # Calculate market cap based on the previous close price and volume of the last trading day
+                previous_close_price = history["Close"].iloc[-2]
+                volume = history["Volume"].iloc[-1]
+                market_cap = calculate_market_cap(previous_close_price, volume)
+                data["Market Cap"] = market_cap   
 
         # Fetch company name and market capitalization
         info = stock.info
@@ -123,6 +151,7 @@ def fetch_data(asset_type, ticker, market_open=None):
                 data[label] = COLOR_GREEN + str(value) + COLOR_RESET if value is not None else COLOR_BLUE + "Unavailable" + COLOR_RESET
         company_name = info.get("longName", None)
         data[LABELS["company_name"]] = COLOR_GREEN + str(company_name) + COLOR_RESET if company_name is not None else COLOR_BLUE + "Unavailable" + COLOR_RESET
+        data["Timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     except Exception as e:
         logger.error(COLOR_RED + "Failed to fetch data: %s" % e + COLOR_RESET)
