@@ -1,53 +1,39 @@
-
 # Invest Guard
 
-Invest Guard is a Python-based investment opportunity analysis tool that allows users to analyze various investment opportunities such as stocks, bonds, mutual funds, and more. It provides data fetching capabilities to gather relevant information for analysis.
+Invest Guard is a command-line interface (CLI) tool for fetching and analyzing financial data from various sources. With Invest Guard, you can easily retrieve stock prices, company information, historical data, and more, all from the comfort of your terminal.
 
 ## Features
 
-- Select from a range of investment opportunities.
-- Fetch data for the selected investment opportunity.
-- Analyze and assess investment opportunities.
+- **Data Fetching**: Fetch real-time and historical data for stocks and other financial instruments.
+- **Command-Line Interface**: Intuitive command-line interface for easy interaction and data retrieval.
+- **Multiple Data Sources**: Support for fetching data from various sources, including Yahoo Finance and others.
+- **Customization**: Flexible command-line options to customize data retrieval, such as specifying ticker symbols, date ranges, and more.
+- **User-Friendly**: Simple and straightforward interface with clear prompts and feedback messages.
+- **Modular Design**: Modular architecture with separate modules for different functionalities, making it easy to extend and maintain.
 
 ## Installation
 
-Install Invest Guard using pip:
+You can install Invest Guard using pip:
 
 ```bash
 pip install invest-guard
 ```
 
-Alternatively, you can clone the repository:
-
-```bash
-git clone https://github.com/your-username/invest_guard.git
-cd invest_guard
-pip install -r requirements.txt
-```
-
-Replace `your-username` with your actual GitHub username if you choose to clone the repository.
-
 ## Usage
 
-To use Invest Guard, simply run the `main.py` file:
+To fetch stock data, simply use the `guard fetch` command followed by the appropriate options. For example:
 
 ```bash
-python main.py
+guard fetch --ticker AAPL --start-date 2022-01-01 --end-date 2022-12-31
 ```
 
-Follow the on-screen instructions to select an investment opportunity and fetch data for analysis.
+For more information on available commands and options, refer to the [documentation](https://github.com/Work-With-Phoenix/invest-guard).
 
 ## Contributing
 
-Contributions are welcome! If you'd like to contribute to Invest Guard, please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-new-feature`).
-3. Make your changes.
-4. Commit your changes (`git commit -am 'Add new feature'`).
-5. Push to the branch (`git push origin feature-new-feature`).
-6. Create a new Pull Request.
+Contributions are welcome! If you encounter any issues or have suggestions for improvements, please feel free to open an issue or submit a pull request on [GitHub](https://github.com/Work-With-Phoenix/invest-guard).
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
