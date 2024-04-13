@@ -1,0 +1,40 @@
+name: Invest Guard
+
+on:
+    push:
+        branches:
+            - main
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+
+            - name: Set up Python
+              uses: actions/setup-python@v2
+              with:
+                  python-version: 3.9
+
+            - name: Install dependencies
+              run: |
+                  python3 -m pip install --upgrade pip
+                  python3 pip install --upgrade
+                  python3 -m pip install setuptools
+                  
+
+            - name: Build distributions package
+              run: python3 setup.py sdist bdist_wheel
+
+
+            - name: Publish to PyPI
+              uses: pypa/gh-action-pypi-publish@master
+
+              with:
+                  user: __token__
+                  password: ${{ secrets.PYPI_API_TOKEN }}
+                  repository_url: https://test.pypi.org/legacy/
+
+
+              
