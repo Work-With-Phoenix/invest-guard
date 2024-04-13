@@ -20,12 +20,12 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools wheel twine  # Install necessary packages
+        pip install setuptools wheel twine  
 
     - name: Build and upload
       env:
         TWINE_USERNAME: __token__  # Make sure to set your PyPI username as a GitHub secret
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}  # Make sure to set your PyPI password or API token as a GitHub secret
+        TWINE_PASSWORD: pypi-AgEIcHlwaS5vcmcCJGQ3OGU5NWRiLWNlMTgtNDYwYi1hYzEwLWMyN2I2ODBiYWMzOAACKlszLCI2MmViMjY2NS0xNWJlLTRhZjMtODdmMy0xZGM1OGJmNTUyNGIiXQAABiCsdQGtLJyCl1NmEMAcoHvVpqfM6Kz9U_oD1wOV_5YXFg
       run: |
-        python setup.py sdist bdist_wheel  # Build your distribution
-        twine upload --repository-url https://test.pypi.org/legacy/ dist/*  # Upload to test PyPI
+        python setup.py sdist bdist_wheel  
+        twine upload --repository-url https://test.pypi.org/legacy/ dist/* 
