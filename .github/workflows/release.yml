@@ -24,7 +24,7 @@ jobs:
 
     - name: Build and upload
       env:
-        TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}  # Make sure to set your PyPI username as a GitHub secret
+        TWINE_USERNAME: __token__  # Make sure to set your PyPI username as a GitHub secret
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}  # Make sure to set your PyPI password or API token as a GitHub secret
       run: |
         python setup.py sdist bdist_wheel  # Build your distribution
