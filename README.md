@@ -24,10 +24,10 @@ pip install invest-guard
 To fetch stock data, simply use the `guard fetch` command followed by the appropriate options. For example:
 
 ```bash
-guard fetch --ticker AAPL --start-date 2022-01-01 --end-date 2022-12-31
+guard fetch --asset-type stock --ticker AAPL -s yahoo -z "United States" --start-date 2022-01-01 --end-date 2022-12-31
 ```
 
-For more information on available commands and options, refer to the [documentation](https://github.com/Work-With-Phoenix/invest-guard).
+For more information on available commands and options, refer to the [documentation](https://phoenixui.cloud/projects/invest-guard).
 
 ## Contributing
 

@@ -19,7 +19,7 @@ __pycache__/
 
 # Directory for Python interpreter
 .idea/
-
+.github/
 # Dependency directories
 venv/
 env/

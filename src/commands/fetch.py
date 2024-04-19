@@ -1,6 +1,9 @@
 import logging
 from datetime import time, datetime, timedelta
+import os
+import pandas as pd
 import pytz
+from pytz import UTC
 import yfinance as yf
 from colorama import Fore, Style
 from retry import retry
@@ -147,6 +150,50 @@ def fetch_data(asset_type, ticker, start_date=None, end_date=None, market_open=N
         raise RuntimeError(f"Failed to fetch data for {ticker}: {e}")
         
     return data
+def export_data(data, ticker, start_date, end_date, export_format, export_filename):
+    # Extract the file extension from the provided filename
+    filename, extension = os.path.splitext(export_filename)
+
+    # Construct dynamic filename
+    dynamic_filename = f"{ticker}_data_{start_date}_to_{end_date}.{export_format}"
+
+    # Construct export file path
+    export_dir = os.path.join(os.path.expanduser("~"), "Documents", "invest_guard")
+    os.makedirs(export_dir, exist_ok=True)
+    filepath = os.path.join(export_dir, export_filename if extension else dynamic_filename)
+
+    # Convert 'Timestamp' column to datetime type if it's not already in datetime format
+    if isinstance(data, pd.DataFrame) and 'Timestamp' in data.columns:
+        data['Timestamp'] = pd.to_datetime(data['Timestamp'], errors='coerce')
+
+    if export_format == "xlsx":
+        # Export to Excel with pandas ExcelWriter
+        if isinstance(data, pd.DataFrame):
+            # Convert datetime to string format without timezone information
+            for col in data.columns:
+                if pd.api.types.is_datetime64_any_dtype(data[col]):
+                    data[col] = data[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+            with pd.ExcelWriter(filepath) as writer:
+                data.to_excel(writer, index=False)
+        else:
+            raise ValueError("Data must be a DataFrame when exporting to Excel.")
+    else:
+        # For other export formats (e.g., csv, json)
+        if isinstance(data, pd.DataFrame):
+            data = data.to_dict(orient="records")
+        elif not isinstance(data, list):
+            raise ValueError("Data must be either a DataFrame or a list of dictionaries.")
+
+        # Export data to specified format
+        if export_format == "csv":
+            pd.DataFrame(data).to_csv(filepath, index=False)
+        elif export_format == "json":
+            pd.DataFrame(data).to_json(filepath, orient="records")
+        else:
+            raise ValueError(f"Invalid export format: {export_format}")
+
+        print(f"Data exported successfully to {filepath}.")
 
 def fetch_command(args):
     logger.info("Fetching data...")
@@ -194,11 +241,21 @@ def fetch_command(args):
             rows = [[value for value in entry.values()] for entry in data]  # Extract values from each entry
             table = tabulate(rows, headers=headers, tablefmt="grid")
             print(table)
+
+            # Check if export format is provided
+            if args.export_format:
+                # convert data to DataFrame it it's alist
+                if isinstance(data, list):
+                    data = pd.DataFrame(data)
+
+                # Export data if export option is provided
+                export_data(data, args.ticker, args.start_date, args.end_date, args.export_format, args.export_filename)
         else:
             logger.warning("No data fetched for %s", args.ticker)
 
     else:
         logger.warning("Invalid source specified. Only 'yahoo' source is supported.")
+
 def setup_subparser(subparsers):
     fetch_parser = subparsers.add_parser("fetch", help="Fetch data")
     fetch_parser.add_argument("-t", "--ticker", help="Ticker symbol", required=True)
@@ -207,6 +264,8 @@ def setup_subparser(subparsers):
     fetch_parser.add_argument("--asset-type", help="Asset type to fetch data for", choices=["stock", "etf", "crypto", "currency", "commodity"], required=True)
     fetch_parser.add_argument("--start-date", help="Start date for historical data (YYYY-MM-DD)")
     fetch_parser.add_argument("--end-date", help="End date for historical data (YYYY-MM-DD)")
+    fetch_parser.add_argument("--export-format", help="Export format for f`etched data", choices=["csv", "json", "xlsx"])
+    fetch_parser.add_argument("--export-filename", help="Export filename for fetched data")
 
 
 def execute(args):
@@ -237,6 +296,8 @@ def setup_subparser(subparsers):
     fetch_parser.add_argument("--asset-type", help="Asset type to fetch data for", choices=["stock", "etf", "crypto", "currency", "commodity"], required=True)
     fetch_parser.add_argument("--start-date", help="Start date for historical data fetch")
     fetch_parser.add_argument("--end-date", help="End date for historical data fetch")
+    fetch_parser.add_argument("--export-format", help="Export format for fetched data", choices=["csv", "json", "xlsx"])
+    fetch_parser.add_argument("--export-filename", help="Export filename for fetched data")
 
 def execute(args):
     if args.command == "fetch":

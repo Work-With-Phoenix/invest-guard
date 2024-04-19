@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
-
+from version import VERSION
 setup(
     name='invest_guard',
-    version='0.1.0',
+    version=VERSION,
     packages=find_packages(),
     entry_points={
         'console_scripts': [
